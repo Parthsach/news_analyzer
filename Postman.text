@@ -1,9 +1,4 @@
-curl -X POST "http://localhost:8000/top-headlines" -H "Content-Type: application/json" -d '{
-    "country": "in",
-    "category": "technology",
-    "page": 1,
-    "pageSize": 10
-}'
+
 
 curl -X POST "http://localhost:8000/analyze" -H "Content-Type: application/json" -d '{
     "text": "Your news text here",
