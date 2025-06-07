@@ -9,6 +9,7 @@ from source_credibility import SOURCE_CREDIBILITY
 from urllib.parse import urlparse
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from twitter_utils import get_social_signals
+from fake_news_classifier import classify_fake_news
 
 
 sentiment_analyzer = SentimentIntensityAnalyzer()
@@ -184,6 +185,7 @@ def verify_news_topic(topic: str, days_back: int = 7, similarity_threshold: floa
 def analyze_news_credibility(text: str, topic: str):
     """
     Analyze news credibility by comparing with current and recent news
+    and apply fake news detection classifier.
     """
     # Get verification from news sources
     verification = verify_news_topic(topic)
@@ -194,8 +196,8 @@ def analyze_news_credibility(text: str, topic: str):
         total_matches = verification.get("total_matches", 0)
         
         # Score calculation factors in both relevant and total matches
-        base_score = min(relevant_matches * 0.2, 0.7)  # Up to 70% from relevant matches
-        total_score = min(total_matches * 0.01, 0.3)   # Up to 30% from total matches
+        base_score = min(relevant_matches * 0.2, 0.7)
+        total_score = min(total_matches * 0.01, 0.3)
         credibility_score = min(base_score + total_score, 1.0)
         
         # Determine assessment based on score
@@ -209,18 +211,21 @@ def analyze_news_credibility(text: str, topic: str):
             assessment = "unverified"
             message = "Limited or no coverage found in reliable sources"
         
+        # 🔥 Add fake news classification
+        fake_news_result = classify_fake_news(text)
+        
         return {
             "credibility_score": credibility_score,
             "verification_results": verification,
             "assessment": assessment,
-            "message": message
+            "message": message,
+            "fake_news_detection": fake_news_result
         }
     
     return {
         "status": "error",
         "message": verification["message"]
     }
-
 def get_comprehensive_analysis(topic, text):
     """
     Get comprehensive analysis including related tweets and news verification

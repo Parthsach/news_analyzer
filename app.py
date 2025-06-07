@@ -5,6 +5,11 @@ from model_utils import classify_news, summarize_news, interpret_news
 from url_utils import extract_text_from_url
 from news_verification import  verify_news_topic, analyze_news_credibility, search_news
 from typing import Optional
+from fastapi import  UploadFile
+from PIL import Image
+from io import BytesIO
+import pytesseract
+import logging
 
 app = FastAPI(title="News Analyzer & Verifier")
 
@@ -16,11 +21,6 @@ class NewsURLRequest(BaseModel):
     url: HttpUrl
     topic: Optional[str] = None
 
-class TopHeadlinesRequest(BaseModel):
-    country: str = "in"
-    category: Optional[str] = None
-    page: int = 1
-    page_size: int = 10
 
 class NewsSearchRequest(BaseModel):
     query: str
@@ -80,8 +80,6 @@ def format_news_analysis(output):
 
     return result
 
-
-
 @app.post("/analyze")
 def analyze_news(req: NewsRequest):
     """
@@ -112,6 +110,59 @@ def analyze_news(req: NewsRequest):
         "raw": raw_output,
         "formatted": formatted_output
     }
+
+
+logger = logging.getLogger("news_analyzer")
+logging.basicConfig(level=logging.INFO)
+
+@app.post("/analyze-image")
+async def analyze_image(file: UploadFile):
+    try:
+        # 1️⃣ Check content type (optional)
+        if file.content_type not in ["image/png", "image/jpeg"]:
+            raise HTTPException(status_code=415, detail="Unsupported file type. Only PNG and JPEG images are supported.")
+
+        # 2️⃣ Read and process image
+        image_data = await file.read()
+        image = Image.open(BytesIO(image_data))
+
+        # 3️⃣ OCR using pytesseract with language support (optional)
+        # Make sure you have the language packs installed for 'eng' and 'hin'!
+        extracted_text = pytesseract.image_to_string(image, lang='eng+hin')
+        logger.info(f"Extracted text length: {len(extracted_text.strip())}")
+
+        if not extracted_text.strip():
+            raise HTTPException(status_code=400, detail="No text found in the image.")
+
+        # 4️⃣ Analyze text using your existing pipeline
+        classification = classify_news(extracted_text)
+        summary = summarize_news(extracted_text)
+        interpretation = interpret_news(extracted_text)
+        credibility = analyze_news_credibility(extracted_text, topic=summary[:30])  # short summary as topic
+
+        # 5️⃣ Package result
+        raw_output = {
+            "classification": classification,
+            "summary": summary,
+            "interpretation": interpretation,
+            "credibility_analysis": credibility
+        }
+
+        formatted_output = format_news_analysis(raw_output)
+
+        logger.info(f"Image analysis completed successfully.")
+
+        return {
+            "extracted_text": extracted_text,
+            "raw": raw_output,
+            "formatted": formatted_output
+        }
+
+    except Exception as e:
+        logger.error(f"Error in analyze-image endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 
 @app.post("/analyze-url")
 async def analyze_from_url(req: NewsURLRequest):
